@@ -37,11 +37,12 @@ class MixServer:
     #     self.fernet = Fernet(self.key)
 
     # forward a message to its destination
-    def forward_massage(self, dst_ip, dst_port, msg):
+    def forward_message(self, dst_ip, dst_port, msg):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.connect((dst_ip, dst_port))
         s.send(msg)
         s.close()
+        # TODO: validate with a real message from Alice
 
     def decrypt_message(self, msg):
         # text = self.fernet.decrypt(msg)  # maybe msg.encode()
@@ -63,10 +64,18 @@ class MixServer:
         text = msg[6:]
         text = self.decrypt_message(text)
         return dst_ip, dst_port, text
-        # TODO: validate with a real message from alice
+        # TODO: validate with a real message from Alice
 
     def forward_all_messages(self):
-        pass
+        # TODO: lock self.received_messages
+        messages = self.received_messages[:]
+        num_msg = len(messages)
+        self.received_messages = self.received_messages[num_msg:]
+
+        for msg in messages:
+            dst_ip, dst_port, m = self.decrypt_message_by_parts(msg)
+            self.forward_message(dst_ip, dst_port, m)
+        # TODO: unlock self.received_messages
 
 def main():
     mix_server = MixServer(sys.argv[1])
@@ -75,10 +84,8 @@ def main():
     # print(s[4:6])
     # print(s[6:])
 
-    # TODO: implemet decrypting and forwarding a single message.
     # TODO: send all current messages (copy from the queue and start a new queue) by a timer (see saved example)
     # TODO: receive messages in parallel with the sending
-    # TODO: get argument, wait for the defined time (by loop?), receive messages and forward all. change self.file_number and self.file if needed.
 
 
 main()
