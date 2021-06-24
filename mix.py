@@ -1,7 +1,8 @@
-import base64
+# import base64
+import socket
 import sys
 
-from cryptography.fernet import Fernet
+# from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
@@ -37,7 +38,10 @@ class MixServer:
 
     # forward a message to its destination
     def forward_massage(self, dst_ip, dst_port, msg):
-        pass
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect((dst_ip, dst_port))
+        s.send(msg)
+        s.close()
 
     def decrypt_message(self, msg):
         # text = self.fernet.decrypt(msg)  # maybe msg.encode()
@@ -66,10 +70,10 @@ class MixServer:
 
 def main():
     mix_server = MixServer(sys.argv[1])
-    s = "1234567890"
-    print(s[:4])
-    print(s[4:6])
-    print(s[6:])
+    # s = "1234567890"
+    # print(s[:4])
+    # print(s[4:6])
+    # print(s[6:])
 
     # TODO: implemet decrypting and forwarding a single message.
     # TODO: send all current messages (copy from the queue and start a new queue) by a timer (see saved example)
@@ -78,4 +82,3 @@ def main():
 
 
 main()
-
