@@ -1,8 +1,6 @@
-# import base64
 import socket
 import sys
 
-# from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
@@ -15,8 +13,11 @@ class MixServer:
         self.key = None
         self.fernet = None
         self.received_messages = []
+        self.ip = None
+        self.port = -1
+        self.buffer_size = 0
         self.load_key()
-        # self.init_fernet()
+        self.init_tcp_params()
 
     def read_file(self):
         file_name = "sk" + str(self.file_number) + ".pem"
@@ -30,11 +31,28 @@ class MixServer:
     def load_key(self):
         key_text = self.read_file()
         self.key = load_pem_private_key(key_text.encode(), None)
-        # self.key = base64.b64encode(key_text.encode())
         self.close_file()
 
-    # def init_fernet(self):
-    #     self.fernet = Fernet(self.key)
+    def init_tcp_params(self):
+        file = open("ips.txt", "r")
+        lines = file.readlines()
+        line = lines[int(self.file_number) - 1]
+        num_servers = len(lines)
+        self.buffer_size = max(8192, 1024 * pow(2, num_servers))
+        ip, port = line.split(" ")
+        self.ip = ip
+        self.port = int(port)
+
+    def receive_messages(self):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.bind((self.ip, self.port))
+        s.listen()
+
+        while True:
+            conn, addr = s.accept()
+            self.received_messages.append(conn.recv(self.buffer_size))
+            conn.close()
+        # TODO: validate with multiple messages, check if new connections are opened
 
     # forward a message to its destination
     def forward_message(self, dst_ip, dst_port, msg):
@@ -45,7 +63,6 @@ class MixServer:
         # TODO: validate with a real message from Alice
 
     def decrypt_message(self, msg):
-        # text = self.fernet.decrypt(msg)  # maybe msg.encode()
         text = self.key.decrypt(
             msg,
             padding.OAEP(
@@ -60,7 +77,7 @@ class MixServer:
         dst_ip = msg[:4]
         dst_ip = self.decrypt_message(dst_ip)
         dst_port = msg[4:6]
-        dst_port = self.decrypt_message(dst_port)
+        dst_port = int(self.decrypt_message(dst_port))
         text = msg[6:]
         text = self.decrypt_message(text)
         return dst_ip, dst_port, text
@@ -79,13 +96,9 @@ class MixServer:
 
 def main():
     mix_server = MixServer(sys.argv[1])
-    # s = "1234567890"
-    # print(s[:4])
-    # print(s[4:6])
-    # print(s[6:])
 
-    # TODO: send all current messages (copy from the queue and start a new queue) by a timer (see saved example)
-    # TODO: receive messages in parallel with the sending
+    # TODO: call forward_all_messages() by a timer (see saved example)
+    # TODO: call receive_messages() in parallel with the sending
 
 
 main()
