@@ -150,6 +150,8 @@ def encrypt_server_info(path, msg):
     ip = ""
     port = ""
 
+    first_server = servers[-1]
+
     for server in servers:
         # get public key for this server
         pk_file_name = "pk" + server + ".pem"
@@ -162,9 +164,10 @@ def encrypt_server_info(path, msg):
         ip = servers_ip[0]
         port = servers_ip[1].strip('\n')
 
-        # encrypt the message with the ip and port and set it as the message for the next server
-        encrypted_msg = encrypt_with_rsa_key(key, msg, ip, port)
-        msg = encrypted_msg
+        if not server == first_server:
+            # encrypt the message with the ip and port and set it as the message for the next server
+            encrypted_msg = encrypt_with_rsa_key(key, msg, ip, port)
+            msg = encrypted_msg
 
     return msg, ip, port
 
@@ -215,13 +218,13 @@ def send_msgs(infos, round):
     print(round)
     for info in infos:
         if info.get_round() == round:
-            '''s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
             s.connect((info.get_mix_ip(), int(info.get_mix_port())))
 
             s.send(info.get_to_send())
 
-            s.close()'''
+            s.close()
 
     round += 1
 
@@ -245,7 +248,8 @@ def main():
     round = 0
 
     # Send first round without wait
-    send_msgs(infos, round)
+    t = threading.Timer(10, send_msgs, [infos, round])
+    t.start()
 
     # Wait 60 seconds and send next round
     for round in range(max_round):
