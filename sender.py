@@ -150,24 +150,35 @@ def encrypt_server_info(path, msg):
     ip = ""
     port = ""
 
-    first_server = servers[-1]
+    prev_server = ""
+    first_server = True
 
     for server in servers:
         # get public key for this server
         pk_file_name = "pk" + server + ".pem"
         pk_file = open(pk_file_name, 'r')
         key = pk_file.read()
-        # get IP and port for this server
-        server_num = int(server)
-        servers_ip = ips[server_num - 1]
-        servers_ip = servers_ip.split(" ")
-        ip = servers_ip[0]
-        port = servers_ip[1].strip('\n')
+        # get IP and port for prev server
+        if not first_server:
+            prev_server_num = int(prev_server)
+            servers_ip = ips[prev_server_num - 1]
+            servers_ip = servers_ip.split(" ")
+            ip = servers_ip[0]
+            port = servers_ip[1].strip('\n')
 
-        if not server == first_server:
-            # encrypt the message with the ip and port and set it as the message for the next server
-            encrypted_msg = encrypt_with_rsa_key(key, msg, ip, port)
-            msg = encrypted_msg
+
+        # encrypt the message with the ip and port and set it as the message for the next server
+        encrypted_msg = encrypt_with_rsa_key(key, msg, ip, port, first_server)
+        msg = encrypted_msg
+
+        first_server = False
+        prev_server = server
+
+    server_num = int(servers[-1])
+    servers_ip = ips[server_num - 1]
+    servers_ip = servers_ip.split(" ")
+    ip = servers_ip[0]
+    port = servers_ip[1].strip('\n')
 
     return msg, ip, port
 
@@ -186,10 +197,14 @@ def encrypt_alices_msg(info):
 
 
 
-def encrypt_with_rsa_key(key, msg, ip, port):
-    port = int(port).to_bytes(2, 'big')
-    ip = bytes(map(int, ip.split('.')))
-    full_message = ip + port + msg
+def encrypt_with_rsa_key(key, msg, ip, port, first_server):
+
+    full_message = msg
+
+    if not first_server:
+        port = int(port).to_bytes(2, 'big')
+        ip = bytes(map(int, ip.split('.')))
+        full_message = ip + port + msg
 
     public_key = serialization.load_pem_public_key(key.encode())
 
