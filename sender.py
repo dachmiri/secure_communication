@@ -265,11 +265,13 @@ def main():
     # Send first round without wait
     t = threading.Timer(10, send_msgs, [infos, round])
     t.start()
+    t.join()
 
     # Wait 60 seconds and send next round
-    for round in range(max_round):
+    for round in range(1, max_round + 1):
         t = threading.Timer(60, send_msgs, [infos, round])
         t.start()
+        t.join()
 
 
 if __name__ == '__main__':

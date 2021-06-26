@@ -1,6 +1,7 @@
-import base64
 import socket
 import sys
+import random
+import threading
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
@@ -49,10 +50,7 @@ class MixServer:
         s.bind(("", self.port))
         s.listen()
 
-        # while True:
-        # TODO: while True!!!!!
-        while len(self.received_messages) == 0:
-
+        while True:
             conn, addr = s.accept()
             self.received_messages.append(conn.recv(self.buffer_size))
 
@@ -71,10 +69,8 @@ class MixServer:
         s.connect((dst_ip, dst_port))
         s.send(msg)
         s.close()
-        # TODO: validate with a real message from Alice
 
     def decrypt_message(self, msg):
-        # msg = base64.b64decode(msg)
         text = self.key.decrypt(
             msg,
             padding.OAEP(
@@ -84,17 +80,6 @@ class MixServer:
             )
         )
         return text
-
-    # def decrypt_message_by_parts(self, msg):
-    #     # msg = base64.b64decode(msg)
-    #     dst_ip = msg[:4]
-    #     # dst_ip = self.decrypt_message(dst_ip)
-    #     dst_port = msg[4:6]
-    #     # dst_port = int(self.decrypt_message(dst_port))
-    #     text = msg[6:]
-    #     text = self.decrypt_message(text)
-    #     return dst_ip, dst_port, text
-    #     # TODO: validate with a real message from Alice
 
     def decrypt_message_ip_port(self, msg):
         decrypted_msg = self.decrypt_message(msg)
@@ -110,28 +95,32 @@ class MixServer:
         messages = self.received_messages[:]
         num_msg = len(messages)
         self.received_messages = self.received_messages[num_msg:]
-
+        random.shuffle(messages)
         for msg in messages:
             dst_ip, dst_port, m = self.decrypt_message_ip_port(msg)
+
+            ###########################################################
+            print("ip: " + dst_ip)
+            print("port: " + str(dst_port))
+            print("decrypted message: ")
+            print(m)
+            print()
+            ###########################################################
+
             self.forward_message(dst_ip, dst_port, m)
         # TODO: unlock self.received_messages
 
 def main():
     mix_server = MixServer(sys.argv[1])
-    mix_server.receive_messages()
+    threading.Thread(target=mix_server.receive_messages).start()
+    while True:
+        t = threading.Timer(60, mix_server.forward_all_messages)
+        t.start()
+        t.join()
 
-    dst_ip, dst_port, decrypted_msg = mix_server.decrypt_message_ip_port(mix_server.received_messages[0])
-    print("ip: " + dst_ip)
-    print("port: " + str(dst_port))
-    print("decrypted message: ")
-    print(decrypted_msg)
-
-    # decrypted_msg = mix_server.decrypt_message(mix_server.received_messages[0])
-    # print("decrypted message: ")
-    # print(decrypted_msg)
-
-    # TODO: call forward_all_messages() by a timer (see saved example)
-    # TODO: call receive_messages() in parallel with the sending
+    # TODO: delete prints in all files
+    # TODO: add submission details in all three files
+    # TODO: document and submit
 
 
 main()
