@@ -1,3 +1,5 @@
+# Maria Dach, 208539080, Shira Negbi, 313236911
+
 import socket
 import sys
 import random
@@ -119,7 +121,6 @@ def main():
         t.join()
 
     # TODO: delete debug prints in all files
-    # TODO: add submission details in all three files
     # TODO: document and submit
 
 
