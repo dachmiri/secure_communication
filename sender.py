@@ -1,13 +1,18 @@
 import sys
 import base64
-import os
+import socket
+import threading
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives import serialization
+
+
 
 
 class Info:
-    def __init__(self, message, path, round, password, salt, dest_ip, dest_port, to_send):
+    def __init__(self, message, path, round, password, salt, dest_ip, dest_port, to_send, mix_ip, mix_port):
         self.message = message
         self.path = path
         self.round = round
@@ -16,6 +21,8 @@ class Info:
         self.dest_ip = dest_ip
         self.dest_port = dest_port
         self.to_send = to_send
+        self.mix_ip = mix_ip
+        self.mix_port = mix_port
 
     def __init__(self):
         self.message = ""
@@ -26,6 +33,8 @@ class Info:
         self.dest_ip = ""
         self.dest_port = ""
         self.to_send = ""
+        self.mix_ip = ""
+        self.mix_port = ""
 
     def get_message(self):
         return self.message
@@ -51,6 +60,12 @@ class Info:
     def get_to_send(self):
         return self.to_send
 
+    def get_mix_port(self):
+        return self.mix_port
+
+    def get_mix_ip(self):
+        return self.mix_ip
+
     def set_message(self, message):
         self.message = message
 
@@ -74,6 +89,12 @@ class Info:
 
     def set_to_send(self, to_send):
         self.to_send = to_send
+
+    def set_mix_port(self, mix_port):
+        self.mix_port = mix_port
+
+    def set_mix_ip(self, mix_ip):
+            self.mix_ip = mix_ip
 
 
 # This function in charge of retrieving the parameters from messagesX.txt file
@@ -110,9 +131,9 @@ def create_key(password, salt):
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=32,
-        salt=salt,
+        salt=salt.encode(),
         iterations=100000, )
-    key = base64.urlsafe_b64encode(kdf.derive(password))
+    key = base64.urlsafe_b64encode(kdf.derive(password.encode()))
 
     return key
 
@@ -121,53 +142,115 @@ def encrypt_server_info(path, msg):
     # create a list of all server numbers in the path
     servers = path.split(",")
     # last server in path should be encrypted first
-    servers.revers()
+    servers.reverse()
     # get ips and ports for all servers
     ips_file = open("ips.txt", 'r')
     ips = ips_file.readlines()
+
+    ip = ""
+    port = ""
 
     for server in servers:
         # get public key for this server
         pk_file_name = "pk" + server + ".pem"
         pk_file = open(pk_file_name, 'r')
-        key = pk_file.readline()
+        key = pk_file.read()
         # get IP and port for this server
         server_num = int(server)
-        servers_ip = ips[server_num]
+        servers_ip = ips[server_num - 1]
         servers_ip = servers_ip.split(" ")
         ip = servers_ip[0]
-        port = servers_ip[1]
+        port = servers_ip[1].strip('\n')
 
         # encrypt the message with the ip and port and set it as the message for the next server
-        encrypted_msg = encrypt(msg, ip, port, key)
+        encrypted_msg = encrypt_with_rsa_key(key, msg, ip, port)
         msg = encrypted_msg
 
-    return msg
+    return msg, ip, port
+
+
 
 
 def encrypt_alices_msg(info):
     key = create_key(info.get_password(), info.get_salt())
     full_message = encrypt(info.get_message(), info.get_dest_ip(), info.get_dest_port(), key)
 
-    encrypt_server_info(info.get_path(), full_message)
+    msg, ip, port = encrypt_server_info(info.get_path(), full_message)
+
+    info.set_to_send(msg)
+    info.set_mix_ip(ip)
+    info.set_mix_port(port)
 
 
 
+def encrypt_with_rsa_key(key, msg, ip, port):
+    port = int(port).to_bytes(2, 'big')
+    ip = bytes(map(int, ip.split('.')))
+    full_message = ip + port + msg
+
+    public_key = serialization.load_pem_public_key(key.encode())
+
+    ciphertext = public_key.encrypt(
+        full_message,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
+    )
+
+    return ciphertext
 
 
 def encrypt(message, ip, port, key):
     f = Fernet(key)
-    encrypted_message = f.encrypt(message())
-    full_message = ip | port | encrypted_message
+    encrypted_message = f.encrypt(message.encode())
+    port = int(port).to_bytes(2, 'big')
+    ip = bytes(map(int,ip.split('.')))
+    full_message = ip + port + encrypted_message
 
     return full_message
 
+def send_msgs(infos, round):
+    print(round)
+    for info in infos:
+        if info.get_round() == round:
+            '''s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+            s.connect((info.get_mix_ip(), int(info.get_mix_port())))
+
+            s.send(info.get_to_send())
+
+            s.close()'''
+
+    round += 1
+
+
+def get_max_round(infos):
+    max_round = 0
+    for info in infos:
+        # Convert round to int for this function and next cases
+        info.set_round(int(info.get_round()))
+        if info.get_round() > max_round:
+            max_round = info.get_round()
+    return max_round
 
 def main():
     infos = get_parameters()
 
     for info in infos:
         encrypt_alices_msg(info)
+
+    max_round = get_max_round(infos)
+    round = 0
+
+    # Send first round without wait
+    send_msgs(infos, round)
+
+    # Wait 60 seconds and send next round
+    for round in range(max_round):
+        t = threading.Timer(60, send_msgs, [infos, round])
+        t.start()
 
 
 if __name__ == '__main__':
