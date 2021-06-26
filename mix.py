@@ -1,3 +1,4 @@
+import base64
 import socket
 import sys
 
@@ -45,14 +46,24 @@ class MixServer:
 
     def receive_messages(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.bind((self.ip, self.port))
+        s.bind(("", self.port))
         s.listen()
 
-        while True:
+        # while True:
+        # TODO: while True!!!!!
+        while len(self.received_messages) == 0:
+
             conn, addr = s.accept()
             self.received_messages.append(conn.recv(self.buffer_size))
+
+            #############################################################
+            num_msg = len(self.received_messages)
+            print("Message number " + str(num_msg) + ":\n")
+            print(self.received_messages[num_msg - 1])
+            print()
+            #############################################################
+
             conn.close()
-        # TODO: validate with multiple messages, check if new connections are opened
 
     # forward a message to its destination
     def forward_message(self, dst_ip, dst_port, msg):
@@ -63,6 +74,7 @@ class MixServer:
         # TODO: validate with a real message from Alice
 
     def decrypt_message(self, msg):
+        # msg = base64.b64decode(msg)
         text = self.key.decrypt(
             msg,
             padding.OAEP(
@@ -73,15 +85,25 @@ class MixServer:
         )
         return text
 
-    def decrypt_message_by_parts(self, msg):
-        dst_ip = msg[:4]
-        dst_ip = self.decrypt_message(dst_ip)
-        dst_port = msg[4:6]
-        dst_port = int(self.decrypt_message(dst_port))
-        text = msg[6:]
-        text = self.decrypt_message(text)
+    # def decrypt_message_by_parts(self, msg):
+    #     # msg = base64.b64decode(msg)
+    #     dst_ip = msg[:4]
+    #     # dst_ip = self.decrypt_message(dst_ip)
+    #     dst_port = msg[4:6]
+    #     # dst_port = int(self.decrypt_message(dst_port))
+    #     text = msg[6:]
+    #     text = self.decrypt_message(text)
+    #     return dst_ip, dst_port, text
+    #     # TODO: validate with a real message from Alice
+
+    def decrypt_message_ip_port(self, msg):
+        decrypted_msg = self.decrypt_message(msg)
+        dst_ip = decrypted_msg[:4]
+        dst_ip = ".".join([str(x) for x in dst_ip])
+        dst_port = decrypted_msg[4:6]
+        dst_port = int.from_bytes(dst_port,'big')
+        text = decrypted_msg[6:]
         return dst_ip, dst_port, text
-        # TODO: validate with a real message from Alice
 
     def forward_all_messages(self):
         # TODO: lock self.received_messages
@@ -90,12 +112,23 @@ class MixServer:
         self.received_messages = self.received_messages[num_msg:]
 
         for msg in messages:
-            dst_ip, dst_port, m = self.decrypt_message_by_parts(msg)
+            dst_ip, dst_port, m = self.decrypt_message_ip_port(msg)
             self.forward_message(dst_ip, dst_port, m)
         # TODO: unlock self.received_messages
 
 def main():
     mix_server = MixServer(sys.argv[1])
+    mix_server.receive_messages()
+
+    dst_ip, dst_port, decrypted_msg = mix_server.decrypt_message_ip_port(mix_server.received_messages[0])
+    print("ip: " + dst_ip)
+    print("port: " + str(dst_port))
+    print("decrypted message: ")
+    print(decrypted_msg)
+
+    # decrypted_msg = mix_server.decrypt_message(mix_server.received_messages[0])
+    # print("decrypted message: ")
+    # print(decrypted_msg)
 
     # TODO: call forward_all_messages() by a timer (see saved example)
     # TODO: call receive_messages() in parallel with the sending
