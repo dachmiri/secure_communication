@@ -118,7 +118,7 @@ def main():
         t.start()
         t.join()
 
-    # TODO: delete prints in all files
+    # TODO: delete debug prints in all files
     # TODO: add submission details in all three files
     # TODO: document and submit
 
