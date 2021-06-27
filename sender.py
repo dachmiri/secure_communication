@@ -10,9 +10,7 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import serialization
 
-
-
-
+# the information needed in order to encrypt and send a message via a path of mix servers
 class Info:
     def __init__(self, message, path, round, password, salt, dest_ip, dest_port, to_send, mix_ip, mix_port):
         self.message = message
@@ -38,6 +36,7 @@ class Info:
         self.mix_ip = ""
         self.mix_port = ""
 
+    # getters
     def get_message(self):
         return self.message
 
@@ -68,6 +67,7 @@ class Info:
     def get_mix_ip(self):
         return self.mix_ip
 
+    # setters
     def set_message(self, message):
         self.message = message
 
@@ -96,7 +96,7 @@ class Info:
         self.mix_port = mix_port
 
     def set_mix_ip(self, mix_ip):
-            self.mix_ip = mix_ip
+        self.mix_ip = mix_ip
 
 
 # This function in charge of retrieving the parameters from messagesX.txt file
@@ -128,7 +128,7 @@ def get_parameters():
 
     return infos
 
-
+# create a cryptographic key by the password and salt
 def create_key(password, salt):
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
@@ -140,6 +140,7 @@ def create_key(password, salt):
     return key
 
 
+# encrypt the message multiple times by the chain of servers till the destination
 def encrypt_server_info(path, msg):
     # create a list of all server numbers in the path
     servers = path.split(",")
@@ -185,8 +186,7 @@ def encrypt_server_info(path, msg):
     return msg, ip, port
 
 
-
-
+# initialize Alice's encrypted message and destination
 def encrypt_alices_msg(info):
     key = create_key(info.get_password(), info.get_salt())
     full_message = encrypt(info.get_message(), info.get_dest_ip(), info.get_dest_port(), key)
@@ -198,7 +198,7 @@ def encrypt_alices_msg(info):
     info.set_mix_port(port)
 
 
-
+# encrypt a message for one server
 def encrypt_with_rsa_key(key, msg, ip, port, first_server):
 
     full_message = msg
@@ -210,6 +210,7 @@ def encrypt_with_rsa_key(key, msg, ip, port, first_server):
 
     public_key = serialization.load_pem_public_key(key.encode())
 
+    # encrypt by the key
     ciphertext = public_key.encrypt(
         full_message,
         padding.OAEP(
@@ -221,7 +222,7 @@ def encrypt_with_rsa_key(key, msg, ip, port, first_server):
 
     return ciphertext
 
-
+# encrypt Alice's original message for Bob
 def encrypt(message, ip, port, key):
     f = Fernet(key)
     encrypted_message = f.encrypt(message.encode())
@@ -231,9 +232,11 @@ def encrypt(message, ip, port, key):
 
     return full_message
 
+# send all the messaged in the current round
 def send_msgs(infos, round):
-    print(round)
     for info in infos:
+
+        # filter the messages of the current round and send them
         if info.get_round() == round:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
@@ -245,7 +248,7 @@ def send_msgs(infos, round):
 
     round += 1
 
-
+# find the maximum round number
 def get_max_round(infos):
     max_round = 0
     for info in infos:
@@ -256,6 +259,8 @@ def get_max_round(infos):
     return max_round
 
 def main():
+
+    # get the messages' information
     infos = get_parameters()
 
     for info in infos:
