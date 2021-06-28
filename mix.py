@@ -20,6 +20,7 @@ class MixServer:
         self.ip = None
         self.port = -1
         self.buffer_size = 0
+        self.messages_lock = threading.Lock()
         self.load_key()
         self.init_tcp_params()
 
@@ -63,8 +64,13 @@ class MixServer:
 
             # add each received message to the list
             conn, addr = s.accept()
-            self.received_messages.append(conn.recv(self.buffer_size))
+            msg = conn.recv(self.buffer_size)
             conn.close()
+            lock_aquired = self.messages_lock.acquire(False)
+            while not lock_aquired:
+                lock_aquired = self.messages_lock.acquire(False)
+            self.received_messages.append(msg)
+            self.messages_lock.release()
 
     # forward a message to its destination
     def forward_message(self, dst_ip, dst_port, msg):
@@ -97,9 +103,12 @@ class MixServer:
 
     # shuffle the messages received so far, decrypt and forward them
     def forward_all_messages(self):
+        lock_aquired = self.messages_lock.acquire(True)
+        while not lock_aquired:
+            lock_aquired = self.messages_lock.acquire(True)
         messages = self.received_messages[:]
-        num_msg = len(messages)
-        self.received_messages = self.received_messages[num_msg:]
+        self.received_messages = []
+        self.messages_lock.release()
         random.shuffle(messages)
         for msg in messages:
 
